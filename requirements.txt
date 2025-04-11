@@ -1,0 +1,7 @@
+azure-functions
+semantic-kernel==1.26.1
+azure-ai-foundry
+azure-storage-blob
+python-dotenv
+azure-functions
+azure-identity
