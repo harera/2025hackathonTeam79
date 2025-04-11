@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solvay Capital Bank Loan Advisor</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background: #f5f7fa;
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+        }
+        
+        /* Mode selector styles */
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 50px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .mode-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            color: #555;
+            transition: all 0.3s ease;
+        }
+        
+        .mode-btn.active {
+            background: #3498db;
+            color: white;
+            box-shadow: 0 2px 5px rgba(52, 152, 219, 0.3);
+        }
+        
+        .mode-btn:hover:not(.active) {
+            background: #f0f0f0;
+        }
+        
+        .content-wrapper {
+            display: flex;
+            flex: 1;
+        }
+        
+        .chat-container {
+            flex: 2;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 100px);
+            margin-right: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-header {
+            padding: 15px 20px;
+            background: #3498db;
+            color: white;
+            border-radius: 12px 12px 0 0;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            max-width: 80%;
+            position: relative;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .bot-message {
+            background: white;
+            border-radius: 18px 18px 18px 0;
+            padding: 12px 18px;
+            align-self: flex-start;
+            float: left;
+            clear: both;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 3px solid #3498db;
+        }
+        
+        .user-message {
+            background: #3498db;
+            color: white;
+            border-radius: 18px 18px 0 18px;
+            padding: 12px 18px;
+            align-self: flex-end;
+            float: right;
+            clear: both;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .chat-input {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #eee;
+            background: white;
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 30px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-input input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        
+        .chat-input button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 30px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-input button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        /* Form container styles */
+        .form-container {
+            flex: 2;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            padding: 25px;
+            height: calc(100vh - 100px);
+            margin-right: 20px;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+        
+        .form-header {
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .form-header h2 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .form-header p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .form-section {
+            margin-bottom: 25px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+        }
+        
+        .form-section h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 18px;
+            color: #3498db;
+            border-bottom: 1px dashed #ddd;
+            padding-bottom: 8px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            flex: 1;
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        
+        .form-group input[type="file"] {
+            padding: 8px;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        
+        .form-actions button {
+            padding: 12px 25px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        #form-cancel-btn {
+            background: #f1f1f1;
+            color: #555;
+            border: 1px solid #ddd;
+        }
+        
+        #form-cancel-btn:hover {
+            background: #e5e5e5;
+        }
+        
+        #form-submit-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+        }
+        
+        #form-submit-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .info-panel {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            padding: 20px;
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        
+        .info-section {
+            margin-bottom: 25px;
+        }
+        
+        .info-section h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            color: #2c3e50;
+            font-size: 18px;
+        }
+        
+        .info-fields {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        
+        .info-field {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #eee;
+            padding: 8px 0;
+        }
+        
+        .field-name {
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        
+        .field-value {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .file-upload {
+            background: #f9f9f9;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload:hover {
+            border-color: #3498db;
+            background: #f0f7fc;
+        }
+        
+        .file-upload input {
+            display: none;
+        }
+        
+        .evaluation-result {
+            background: #e8f4fc;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        button.action-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        button.action-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .typing-indicator {
+            display: none;
+            margin-left: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            font-style: italic;
+            font-size: 14px;
+        }
+        
+        .typing-dots::after {
+            content: '';
+            animation: typing 1.5s infinite;
+        }
+        
+        @keyframes typing {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+            100% { content: ''; }
+        }
+        
+        /* Adapt to different screen sizes */
+        @media (max-width: 1200px) {
+            .container {
+                max-width: 95%;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .chat-container, .form-container, .info-panel {
+                margin-right: 0;
+                margin-bottom: 20px;
+                height: auto;
+                max-height: calc(70vh - 100px);
+            }
+            
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+        }
+        
+        .file-upload-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .file-upload-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .file-upload-button:hover {
+            background-color: #45a049;
+        }
+        
+        .file-upload-button:active {
+            background-color: #3e8e41;
+        }
+        
+        .file-name {
+            margin-top: 5px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .file-upload-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .message-header {
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 5px;
+        }
+
+        .special-message {
+            margin-bottom: 15px;
+            max-width: 80%;
+            width: 80%;
+            position: relative;
+            animation: fadeIn 0.3s ease;
+            background: #c9e7fa;
+            border-radius: 18px 18px 18px 0;
+            padding: 12px 18px;
+            align-self: flex-start;
+            float: left;
+            clear: both;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 3px solid #3498db;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Mode switch buttons -->
+        <div class="mode-selector">
+            <button id="chat-mode-btn" class="mode-btn active">Chat Mode</button>
+            <button id="form-mode-btn" class="mode-btn">Form Mode</button>
+        </div>
+        
+        <div class="content-wrapper">
+            <div class="chat-container" id="chat-view">
+                <div class="chat-header">
+                    Loan Advisor Xiao Su
+                    <span class="typing-indicator">Xiao Su is typing<span class="typing-dots"></span></span>
+                </div>
+                
+                <div class="chat-messages" id="chat-messages">
+                    <!-- Messages will be dynamically added here -->
+                </div>
+                
+                <div class="chat-input">
+                    <input type="text" id="user-input" placeholder="Please enter your question or reply..." autofocus>
+                    <button id="send-btn">Send</button>
+                </div>
+            </div>
+            
+            <!-- Form content area -->
+            <div class="form-container" id="form-view" style="display: none;">
+                <div class="form-header">
+                    <h2>Loan Application Form</h2>
+                    <p>Please fill in the following information, all fields marked with * are required</p>
+                </div>
+                
+                <form id="loan-application-form">
+                    <div class="form-section">
+                        <h3>Personal Information</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="form-name">Name *</label>
+                                <input type="text" id="form-name" name="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="form-age">Age *</label>
+                                <input type="number" id="form-age" name="age" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="form-phone">Contact Number *</label>
+                                <input type="tel" id="form-phone" name="phone" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="form-email">Email *</label>
+                                <input type="email" id="form-email" name="email" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="form-address">Home Address *</label>
+                            <input type="text" id="form-address" name="address" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Employment Information</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="form-employer">Company Name *</label>
+                                <input type="text" id="form-employer" name="employer" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="form-position">Position *</label>
+                                <input type="text" id="form-position" name="position" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="form-monthly-income">Monthly Income (CNY) *</label>
+                            <input type="number" id="form-monthly-income" name="monthlyIncome" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Loan Information</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="form-loan-amount">Loan Amount (CNY) *</label>
+                                <input type="number" id="form-loan-amount" name="loanAmount" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="form-loan-term">Loan Term (Years) *</label>
+                                <input type="number" id="form-loan-term" name="loanTerm" required>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="form-loan-purpose">Loan Purpose *</label>
+                            <input type="text" id="form-loan-purpose" name="loanPurpose" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>Property Information</h3>
+                        <div class="form-group">
+                            <label for="form-property-address">Mortgage Property Address *</label>
+                            <input type="text" id="form-property-address" name="propertyAddress" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="form-property-size">Property Area (Square Meters) *</label>
+                            <input type="number" id="form-property-size" name="propertySize" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h3>File Upload</h3>
+                        <div class="file-upload-container">
+                            <div class="file-upload-wrapper">
+                                <input type="file" id="employmentCertificate" accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+                                <button class="file-upload-button" onclick="document.getElementById('employmentCertificate').click()">Upload Employment Certificate</button>
+                                <div id="employmentCertificateName" class="file-name"></div>
+                            </div>
+                            <div class="file-upload-wrapper">
+                                <input type="file" id="bankStatement" accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+                                <button class="file-upload-button" onclick="document.getElementById('bankStatement').click()">Upload Bank Statement</button>
+                                <div id="bankStatementName" class="file-name"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" id="form-cancel-btn">Cancel</button>
+                        <button type="submit" id="form-submit-btn">Submit Application</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="info-panel" id="info-panel">
+                <div class="info-section">
+                    <h3>Application Information</h3>
+                    <div class="info-fields" id="application-info">
+                        <!-- Application information will be dynamically displayed here -->
+                        <div class="info-field">
+                            <span class="field-name">Name:</span>
+                            <span class="field-value" id="info-name">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Age:</span>
+                            <span class="field-value" id="info-age">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Contact Number:</span>
+                            <span class="field-value" id="info-phone">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Email:</span>
+                            <span class="field-value" id="info-email">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Home Address:</span>
+                            <span class="field-value" id="info-address">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Company Name:</span>
+                            <span class="field-value" id="info-employer">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Position:</span>
+                            <span class="field-value" id="info-position">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Monthly Income:</span>
+                            <span class="field-value" id="info-monthly-income">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Loan Amount:</span>
+                            <span class="field-value" id="info-loan-amount">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Loan Purpose:</span>
+                            <span class="field-value" id="info-loan-purpose">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Loan Term:</span>
+                            <span class="field-value" id="info-loan-term">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Mortgage Property Address:</span>
+                            <span class="field-value" id="info-property-address">Not filled</span>
+                        </div>
+                        <div class="info-field">
+                            <span class="field-name">Property Area:</span>
+                            <span class="field-value" id="info-property-size">Not filled</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="info-section">
+                    <h3>File Upload</h3>
+                    <div class="file-upload" id="cert-upload">
+                        <label for="employment-cert-input">
+                            <i class="fa fa-upload"></i> 
+                            <span id="cert-label">Click to upload Employment Certificate</span>
+                            <input type="file" id="employment-cert-input" onchange="updateFileName('employment-cert-input', 'cert-label')">
+                        </label>
+                    </div>
+                    <div class="file-upload" id="statement-upload">
+                        <label for="bank-statement-input">
+                            <i class="fa fa-upload"></i> 
+                            <span id="statement-label">Click to upload Bank Statement</span>
+                            <input type="file" id="bank-statement-input" onchange="updateFileName('bank-statement-input', 'statement-label')">
+                        </label>
+                    </div>
+                    <button class="action-btn" id="upload-btn" onclick="handleFileUpload()">Upload Files</button>
+                </div>
+                
+                <div class="info-section" id="evaluation-section" style="display: none;">
+                    <h3>Loan Evaluation Result</h3>
+                    <div class="evaluation-result" id="evaluation-result">
+                        <!-- Evaluation result will be displayed here -->
+                    </div>
+                    <button class="action-btn" id="new-application-btn">Start a New Application</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="loan_api_client.js"></script>
+    <script>
+    // Application data
+    const applicationData = {
+            sessionId: null,
+            state: 'welcome', // welcome, collecting, uploading, evaluating, complete
+            collectedData: {},
+            uploadedFiles: {
+                employmentCertificate: null,
+                bankStatement: null
+            },
+            evaluationResult: null
+        };
+        // Define this function at the outermost level, before all other scripts
+        function updateFileName(inputId, labelId) {
+            const input = document.getElementById(inputId);
+            const label = document.getElementById(labelId);
+            if (input.files.length > 0) {
+                label.textContent = input.files[0].name;
+                // Set different div background colors based on different inputs
+                if (inputId === 'employment-cert-input') {
+                    document.getElementById('cert-upload').style.backgroundColor = '#e8f5e9'; // Light green
+                } else if (inputId === 'bank-statement-input') {
+                    document.getElementById('statement-upload').style.backgroundColor = '#e8f5e9'; // Light green
+                }
+            } else {
+                label.textContent = inputId === 'employment-cert-input' ? 'Click to upload Employment Certificate' : 'Click to upload Bank Statement';
+                // Restore original background color if no file is selected
+                if (inputId === 'employment-cert-input') {
+                    document.getElementById('cert-upload').style.backgroundColor = '#f9f9f9';
+                } else if (inputId === 'bank-statement-input') {
+                    document.getElementById('statement-upload').style.backgroundColor = '#f9f9f9';
+                }
+            }
+        }
+
+        // Handle file upload
+        function handleFileUpload() {
+            const certFile = document.getElementById('employment-cert-input').files[0];
+            const statementFile = document.getElementById('bank-statement-input').files[0];
+
+            if (!certFile || !statementFile) {
+                alert('Please ensure that both Employment Certificate and Bank Statement files are selected!');
+                return;
+            }
+
+            // Call the API to upload files
+            uploadDocuments(applicationData.sessionId, certFile, statementFile)
+                .then(result => {
+                    applicationData.filesUploaded = true;
+                    alert('Files uploaded successfully!');
+                })
+                .catch(error => {
+                    alert('File upload failed: ' + error.message);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM elements
+            const chatMessages = document.getElementById('chat-messages');
+            const userInput = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-btn');
+            const uploadBtn = document.getElementById('upload-btn');
+            const employmentCertInput = document.getElementById('employment-cert-input');
+            const bankStatementInput = document.getElementById('bank-statement-input');
+            const evaluationSection = document.getElementById('evaluation-section');
+            const evaluationResult = document.getElementById('evaluation-result');
+            const newApplicationBtn = document.getElementById('new-application-btn');
+            const typingIndicator = document.querySelector('.typing-indicator');
+            
+            // Mode switch related elements
+            const chatModeBtn = document.getElementById('chat-mode-btn');
+            const formModeBtn = document.getElementById('form-mode-btn');
+            const chatView = document.getElementById('chat-view');
+            const formView = document.getElementById('form-view');
+            const infoPanel = document.getElementById('info-panel');
+            const loanApplicationForm = document.getElementById('loan-application-form');
+            const formCancelBtn = document.getElementById('form-cancel-btn');
+            const formSubmitBtn = document.getElementById('form-submit-btn');
+            const formEmploymentCert = document.getElementById('form-employment-cert');
+            const formBankStatement = document.getElementById('form-bank-statement');
+            
+            let pollingInterval;
+            function startPolling() {
+                pollingInterval = setInterval(() => {
+                    fetch('/poll')  // Request the server
+                        .then(response => response.json())
+                        .then(data => {
+                            const chatBox = document.getElementById('chat-box');
+                            
+                            // Update chat box content
+                            chatBox.innerHTML += `<div>${data.result}</div>`;
+                            
+                            // Check the value of A
+                            if (!data.A) {
+                                console.log("Polling ended because A is false.");
+                                clearInterval(pollingInterval);  // Stop polling
+                            }
+                        })
+                        .catch(error => {
+                            console.error("Error during polling:", error);
+                            clearInterval(pollingInterval);  // Stop polling on error
+                        });
+                }, 2000);  // Poll every 2 seconds
+            }
+            
+            // Generate session ID
+            function generateSessionId() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+            
+            // View mode switch
+            chatModeBtn.addEventListener('click', () => {
+                chatView.style.display = 'flex';
+                formView.style.display = 'none';
+                chatModeBtn.classList.add('active');
+                formModeBtn.classList.remove('active');
+            });
+            
+            formModeBtn.addEventListener('click', () => {
+                chatView.style.display = 'none';
+                formView.style.display = 'block';
+                chatModeBtn.classList.remove('active');
+                formModeBtn.classList.add('active');
+                
+                // If there is collected data, fill the form
+                populateFormWithData();
+            });
+            
+            // Form filling
+            function populateFormWithData() {
+                for (const key in applicationData) {
+                    const formElement = document.getElementById(`form-${key}`);
+                    if (formElement && applicationData[key] !== null && 
+                        applicationData[key] !== '' && 
+                        !['employmentCert', 'bankStatement'].includes(key)) {
+                        formElement.value = applicationData[key];
+                    }
+                }
+            }
+            
+            // Form submission handling
+            loanApplicationForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(loanApplicationForm);
+                
+                // Update application data
+                for (const key in applicationData) {
+                    if (!['employmentCert', 'bankStatement'].includes(key)) {
+                        const formValue = formData.get(key === 'name' ? 'name' : toCamelCase(key));
+                        if (formValue) {
+                            applicationData[key] = formValue;
+                        }
+                    }
+                }
+                
+                // Handle file uploads
+                const employmentCertFile = document.getElementById('form-employment-cert').files[0];
+                const bankStatementFile = document.getElementById('form-bank-statement').files[0];
+                
+                if (employmentCertFile) {
+                    applicationData.uploadedFiles.employmentCertificate = employmentCertFile;
+                }
+                
+                if (bankStatementFile) {
+                    applicationData.uploadedFiles.bankStatement = bankStatementFile;
+                }
+                
+                // Update information panel
+                updateInfoPanel();
+                
+                // Upload files (if any)
+                let uploadSuccess = true;
+                if (employmentCertFile || bankStatementFile) {
+                    uploadSuccess = await uploadFiles(employmentCertFile, bankStatementFile);
+                }
+                
+                // Switch to chat mode
+                chatModeBtn.click();
+                
+                // If upload is successful, show success message and continue conversation
+                if (uploadSuccess) {
+                    addMessage("Form information has been successfully submitted! Do you need to start the loan evaluation?");
+                    
+                    // Record data in session history
+                    const userFormSubmission = {
+                        role: "user",
+                        type: "form_submission",
+                        content: JSON.stringify(applicationData),
+                        timestamp: new Date().toISOString()
+                    };
+                    messageHistory.push(userFormSubmission);
+                    
+                    // Save session to API
+                    saveSession();
+                } else {
+                    addMessage("There was a problem submitting the form, please try again or contact customer service.");
+                }
+            });
+            
+            // Camel case conversion helper function
+            function toCamelCase(str) {
+                return str.replace(/-([a-z])/g, function(g) { 
+                    return g[1].toUpperCase(); 
+                });
+            }
+            
+            // Cancel button handling
+            formCancelBtn.addEventListener('click', function() {
+                chatModeBtn.click(); // Switch back to chat mode
+            });
+            
+            // Auto-upload files
+            function uploadFiles(employmentCert, bankStatement) {
+                if (!employmentCert && !bankStatement) {
+                    return;
+                }
+                
+                uploadDocuments(applicationData.sessionId, employmentCert, bankStatement)
+                    .then(result => {
+                        applicationData.filesUploaded = true;
+                        
+                        if (applicationData.state === 'uploading') {
+                            setTimeout(() => {
+                                addMessage("Files uploaded successfully! You can continue with the loan evaluation process.");
+                                addMessage("Now I can start evaluating your loan application. Please confirm if you want to start the evaluation?");
+                                applicationData.state = 'evaluating';
+                            }, 500);
+                        }
+                    })
+                    .catch(error => {
+                        setTimeout(() => {
+                            addMessage(`File upload failed: ${error.message}`);
+                        }, 500);
+                    });
+            }
+            
+            // Update information panel
+            function updateInfoPanel() {
+                // Get current session data
+                const data = applicationData.collectedData || {};
+                
+                // Update the display of the information panel
+                document.getElementById('info-name').textContent = data.name || 'Not filled';
+                document.getElementById('info-age').textContent = data.age || 'Not filled';
+                document.getElementById('info-phone').textContent = data.phone || 'Not filled';
+                document.getElementById('info-email').textContent = data.email || 'Not filled';
+                document.getElementById('info-address').textContent = data.address || 'Not filled';
+                document.getElementById('info-employer').textContent = data.employer || 'Not filled';
+                document.getElementById('info-position').textContent = data.position || 'Not filled';
+                document.getElementById('info-monthly-income').textContent = data.monthly_income || 'Not filled';
+                document.getElementById('info-loan-amount').textContent = data.loan_amount || 'Not filled';
+                document.getElementById('info-loan-purpose').textContent = data.loan_purpose || 'Not filled';
+                document.getElementById('info-loan-term').textContent = data.loan_term || 'Not filled';
+                document.getElementById('info-property-address').textContent = data.property_address || 'Not filled';
+                document.getElementById('info-property-size').textContent = data.property_size || 'Not filled';
+            }
+            
+            // Show message
+            function addMessage(content, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message', isUser ? 'user-message' : 'bot-message');
+                
+                // Support line breaks
+                if (content.includes('\n')) {
+                    const formattedContent = content.replace(/\n/g, '<br>');
+                    messageDiv.innerHTML = formattedContent;
+                } else {
+                    messageDiv.textContent = content;
+                }
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // Show message
+            function addinfo(content, isUser = false) {
+                let specialMessageDiv = document.getElementById("specialMessage");
+                if (!specialMessageDiv) {
+                    specialMessageDiv = document.createElement('div');
+                    specialMessageDiv.id = "specialMessage"
+                    specialMessageDiv.classList.add('special-message');
+                    // Append the message to chat messages
+                    chatMessages.appendChild(specialMessageDiv);
+                }
+
+                // 添加内容
+                if (specialMessageDiv.innerHTML.trim() === "") {
+                    // 如果内容为空，直接设置新内容
+                    specialMessageDiv.innerHTML = content;
+                } else {
+                    // 如果内容不为空，在现有内容基础上换行拼接新内容
+                    specialMessageDiv.innerHTML += `<br>${content}`;
+                }
+
+                chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to the bottom
+
+            }
+            
+            // Show typing status
+            function showTyping() {
+                typingIndicator.style.display = 'inline-block';
+            }
+            
+            function hideTyping() {
+                typingIndicator.style.display = 'none';
+            }
+            
+            // Send message
+            async function sendMessage() {
+                const userMessage = userInput.value.trim();
+                if (userMessage === '') return;
+                
+                // Show user message
+                addMessage(userMessage, true);
+                userInput.value = '';
+                
+                // Show typing indicator
+                showTyping();
+
+               
+                // end
+
+                try {
+                    const response = await fetch('/api/loan/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            session_id: applicationData.sessionId,
+                            message: userMessage
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log("Received API response:", data);
+                    
+                    // Update application data
+                    applicationData.sessionId = data.session_id;
+                    applicationData.state = data.conversation_state.state;
+                    
+                    // Update collected data
+                    if (data.collected_data) {
+                        applicationData.collectedData = data.collected_data;
+                        // Update information panel
+                        updateInfoPanel();
+                    }
+                    
+                     // start
+                if (userMessage === 'Agree') {
+                    // Define an array containing 5 strings
+                    const messages = [
+                        "Data collection completed",
+                        "Solvia Capital Bank will use the above personal information for loan approval. Do you agree? (Agree/Disagree): Agree",
+                        "User agrees to loan review......",
+                        "Entering the evaluation phase......",
+                        "PS：----------Data collection phase ended, starting log----------",
+                        "<br> Starting the loan evaluation phase......",
+                        "=== Launching Loan Evaluation Phase ===",
+                        "Phase Two: Loan Evaluation",
+                        "System initializing Loan Review Agent Team, this may take some time, please be patient......",
+                        "Submitting the loan application to the evaluation team...",
+                        "<br> Credit Rating Agent: Hello, I am the credit evaluation expert from Solvia Capital Bank. Beginning the credit assessment now......",
+                        "Credit Rating Agent: Evaluating......",
+                        "Credit Rating Agent: The user's credit rating is B. There are slight discrepancies in the reported salary levels. The bank statement shows a monthly income of 30,000 RMB, while the employment proof shows a base salary of 25,000 RMB plus a 5,000 RMB bonus. Debt-to-Income ratio (DTI) calculations show that based on monthly liabilities, the DTI ratio may approach or exceed the 50% threshold, thus manual review is required for final qualification. Next, the Fraud Detection Agent will conduct a fraud risk assessment.",
+                        "<br> Fraud Detection Agent: I am the fraud risk assessment expert from Solvia Capital Bank. Beginning the fraud risk assessment now......",
+                        "Fraud Detection Agent: Evaluating......",
+                        "Fraud Detection Agent: After multiple rounds of discussion, it has been decided: Conditional Approval.",
+                        "### Comprehensive Risk Analysis and Service Recommendations:",
+                        "While concerns about the lack of identity verification, income stability, and credit history for Wang Shu are valid, the absence of negative information (such as defaults or past fraudulent behavior) indicates that the fraud risk may not be immediate. To mitigate potential risks, it is strongly recommended to collect more documents, such as identity verification, income proof, and credit reports. Clarifying these details will help understand Wang Shu's credit status and provide assurance for the loan process.",
+                        "#### Brief Reason:",
+                        "The absence of key information may raise potential fraud issues; however, if there are no negative records, the decision leans towards approval. Implementing a comprehensive documentation process will help ensure the borrower's authenticity and reduce associated risks. Next, please have the Compliance Agent conduct a compliance review.",
+                        "<br> Compliance Agent: I am the compliance assessment expert from Solvia Capital Bank. Let's start the compliance assessment...",
+                        "Compliance Agent: Evaluating...",
+                        "Compliance Agent: Confirming compliance with the bank's internal rules and regulations.",
+                        "Age Requirement: The applicant is at least 20 years old, meets the age requirement, and will be 45 years old at the loan's maturity, which complies with the allowed limits.",
+                        "Credit History: The applicant's credit history information has not been provided, but it is assumed to meet standard requirements.",
+                        "Repayment Ability: The applicant's monthly income is 100,000 RMB, the loan amount is 300,000 RMB, the loan term is 25 years, and the monthly mortgage payment is approximately 1,293 RMB, which is far below twice their monthly income (200,000 RMB).",
+                        "Loan-to-Value Ratio (LTV): The loan amount (300,000 RMB) only accounts for 15% of the property price (2,000,000 RMB), which complies with the 70% limit for first-time homebuyers.",
+                        "Based on this assessment, it is recommended to approve a loan of 300,000 RMB for Wang Shu, with a term of 25 years and an interest rate of 2.35%, to facilitate their property purchase while ensuring compliance with loan policies. Next, please have the Compliance Agent conduct a compliance review.",
+                        "<br> Decision Advise Agent: Found the results of the Credit Rating Agent assessment... Found the results of the Fraud Detection Agent assessment... Found the results of the Contract Compliance Agent assessment... According to bank procedures, it is recommended to start the Agent Group Chat phase.",
+                        "<br> Agent Group Chat has been formed, entering Agent Group Chat.......",
+                        "<br> Group_Manager: Please start the evaluation process.",
+                        "Credit Rating Agent: ",
+                        "To start the evaluation process, here is a summary of the key points based on the applicant's financial situation:",
+                        "Income Information:",
+                        "Monthly income shown in the bank statement: 30,000 RMB",
+                        "Base salary in the employment certificate: 25,000 RMB",
+                        "Bonus: 5,000 RMB",
+                        "Total income in the employment certificate: 30,000 RMB (base salary + bonus)",
+                        "Debt-to-Income Ratio (DTI):",
+                        "The total monthly debt of the applicant is needed to calculate DTI. The calculation method is:",
+                        "DTI=(Total Monthly Debt/Total Monthly Income)×100  DTI=(Total Monthly Income/Total Monthly Debt)×100",
+                        "Based on the stated income, we need the total monthly debt obligations to continue calculating DTI.",
+                        "Credit Rating:",
+                        "The applicant's credit rating is B, indicating moderate credit risk, generally acceptable, but special attention is needed to the DTI ratio, especially when approaching or exceeding 50%.",
+                        "Income Discrepancy:",
+                        "Although there are slight discrepancies, both the bank statement and the employment certificate indicate a monthly income of 30,000 RMB.",
+                        "Next, to further assess credit risk and ultimately complete the evaluation, we need the following information:",
+                        "Total monthly debt (such as loans, credit card repayments, etc.)",
+                        "Other financial information that may affect credit status",
+                        "Please provide total monthly debt information or any relevant supplementary information.",
+                        "<br> Fraud Detection Agent:",
+                        "We need the applicant's current monthly debt information to accurately assess their credit risk level:",
+                        "Debt Situation:",
+                        "Please provide existing debts, including:",
+                        "Monthly loan repayments (e.g., personal loans, car loans, etc.)",
+                        "Credit card repayments",
+                        "Other recurring financial obligations",
+                        "Once this information is obtained, we will calculate the DTI ratio and continue the credit risk assessment. Please also provide any other documents.",
+                        "<br> Compliance Agent:",
+                        "I will assist in assessing whether the loan application meets compliance requirements. Currently, we have income and credit rating information, but lack key information:",
+                        "Please provide the following to calculate DTI and ensure compliance:",
+                        "Monthly loan repayment amount (if any)",
+                        "Credit card repayment amount",
+                        "Other recurring financial obligations",
+                        "<br> Decision Making Agent:",
+                        "Thank you all for your input. We unanimously agree that calculating DTI is necessary to assess the applicant's credit risk.",
+                        "The summary is as follows:",
+                        "Total monthly debt information: including various loans, credit cards, and other debts",
+                        "Compliance check: to be conducted after DTI calculation",
+                        "Final assessment: to be completed in conjunction with credit rating B and slight income discrepancies",
+                        "Please provide the debt information as soon as possible to advance the process.",
+                        "<br> Credit Rating Agent speaks again:",
+                        "Please provide the following debt information:",
+                        "Monthly repayment amounts for personal loans, car loans, etc.",
+                        "Monthly repayment amounts for each credit card",
+                        "Other financial obligations (such as mortgages, student loans, alimony, child support)",
+                        "<br> Fraud Detection Agent speaks again:",
+                        "Please provide the above debt information as soon as possible for a comprehensive assessment.",
+                        "<br> Credit Rating Agent speaks last:",
+                        "I cannot access the applicant's specific data, please provide the required information above so we can continue the assessment process.",
+                        "------------------------------",
+                        "Evaluation session terminated!",
+                        "Processing messages...",
+                        "Found the final message from the decision expert...",
+                        "<br> === Evaluation completed! ===",
+                        "Final recommendation:",
+                        "We unanimously agree that we should first obtain the applicant's total monthly debt obligations to calculate DTI and continue the subsequent risk assessment and compliance process. Please provide this information as soon as possible to advance the approval process.",
+                        "<br> === Solvia Capital Bank loan evaluation process completed ===",
+                        "Thank you for using the Solvia Capital Bank loan evaluation system!"
+                    ];
+
+                    let index = 0; // Current string index
+
+                    // Display one string every 20 seconds
+                    const intervalId = setInterval(function() {
+                        if (index < messages.length) {
+                            addinfo(messages[index]); // Display the current string
+                            console.log("Displaying message: " + messages[index]);
+                            index++; // Update index
+                        } else {
+                            clearInterval(intervalId); // Stop the timer if all messages have been displayed
+                            addMessage('Please provide additional information. Total monthly debt.');
+                            // hideTyping();
+                            console.log("All messages have been displayed, no further processing will be executed.");
+                            return; // Exit the current function to prevent further code execution
+                        }
+                    }, 500); // 500 milliseconds = 20 seconds
+                } else{
+                    // Show reply message
+                    addMessage(data.message);
+                    
+                    // If in evaluating state, show evaluation result
+                    if (data.conversation_state.state === 'evaluating' && data.evaluation_result) {
+                        applicationData.evaluationResult = data.evaluation_result;
+                        showEvaluationResult(data.evaluation_result);
+                    }
+                }
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    addMessage('Sorry, an error occurred, please try again.');
+                } finally {
+                    hideTyping();
+                }
+            
+            }
+            
+            // Show evaluation result
+            function showEvaluationResult(result) {
+                const evaluationSection = document.getElementById('evaluation-section');
+                const evaluationResult = document.getElementById('evaluation-result');
+                
+                evaluationSection.style.display = 'block';
+                evaluationResult.innerHTML = `<pre>${result}</pre>`;
+            }
+            
+            // Reset application
+            function resetApplication() {
+                // Reset data
+                for (let key in applicationData) {
+                    applicationData[key] = '';
+                }
+                applicationData.filesUploaded = false;
+                
+                // Reset session
+                applicationData.sessionId = generateSessionId();
+                
+                // Reset interface
+                updateInfoPanel();
+                employmentCertInput.value = '';
+                bankStatementInput.value = '';
+                evaluationSection.style.display = 'none';
+                
+                // Clear chat history
+                chatMessages.innerHTML = '';
+                
+                // Automatically initialize a new session
+                initializeSession();
+            }
+            
+            // Bind events
+            sendBtn.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', async function(e) {
+                if (e.key === 'Enter') {
+                    await sendMessage();
+                }
+            });
+            
+            newApplicationBtn.addEventListener('click', resetApplication);
+            
+            // Automatically initialize session
+            async function initializeSession() {
+                try {
+                    showTyping();
+                    console.log("Initializing session...");
+                    
+                    // Send an empty message to initialize the session
+                    const response = await sendChatMessage("", null);
+                    
+                    // Update session ID
+                    applicationData.sessionId = response.session_id;
+                    console.log("Session created, ID:", applicationData.sessionId);
+                    
+                    // Update conversation state
+                    applicationData.state = response.conversation_state.state;
+                    
+                    // Update message history
+                    messageHistory = response.messages;
+                    
+                    hideTyping();
+                    
+                    // Clear previous auto-added welcome messages
+                    chatMessages.innerHTML = '';
+                    
+                    // Show welcome message
+                    addMessage('Hello! I am Xiao Su, the intelligent loan advisor of Solvay Capital Bank. I can help you complete the loan application and evaluation process.');
+                    addMessage('You can directly enter "Start Application" or click the button below to start the loan application process.');
+                    
+                    // Add quick reply button
+                    addQuickReplyButton('Start');
+                    
+                } catch (error) {
+                    hideTyping();
+                    console.error("Failed to initialize session:", error);
+                    addMessage('There was a problem connecting to the system, please refresh the page to try again or contact customer service.');
+                }
+            }
+            
+            // Add quick reply button
+            function addQuickReplyButton(text) {
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.display = 'flex';
+                buttonContainer.style.justifyContent = 'center';
+                buttonContainer.style.margin = '10px 0';
+                
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.classList.add('action-btn');
+                button.style.margin = '0 5px';
+                
+                button.addEventListener('click', function() {
+                    // Simulate user clicking this button to send a message
+                    userInput.value = text;
+                    sendMessage();
+                });
+                
+                buttonContainer.appendChild(button);
+                chatMessages.appendChild(buttonContainer);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            // Check API service status
+            checkApiHealth().then(isHealthy => {
+                if (isHealthy) {
+                    // API service is normal, automatically initialize session
+                    initializeSession();
+                } else {
+                    addMessage('Warning: Our system is currently experiencing some issues and may not be able to serve you properly. Please try again later or contact customer service.');
+                }
+            });
+            
+            // Add file upload event listeners
+            document.getElementById('employmentCertificate').addEventListener('change', function(e) {
+                const fileName = e.target.files[0]?.name || 'No file selected';
+                document.getElementById('employmentCertificateName').textContent = fileName;
+            });
+            
+            document.getElementById('bankStatement').addEventListener('change', function(e) {
+                const fileName = e.target.files[0]?.name || 'No file selected';
+                document.getElementById('bankStatementName').textContent = fileName;
+            });
+        });
+    </script>
+</body>
+</html> 
