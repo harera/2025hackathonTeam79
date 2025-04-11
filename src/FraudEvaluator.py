@@ -31,7 +31,7 @@ class CosmosDBClient:
     
     def __init__(self):
         self.client = CosmosClient.from_connection_string(
-            "AccountEndpoint=https://hackaloandb.documents.azure.com:443/;AccountKey=nBAAGrW3NayW8oLRgPh4LgJNE6aqidQRFsU12WVsOwjuOUYHFQGh3HyPPeTRYzVUwON1Gj3KE9SIACDbAsD3zQ==;"
+            "AccountEndpoint=https://=;"
         )
     
     async def get_user_info(self, user_id: str) -> Dict[str, Any]:
@@ -73,7 +73,7 @@ class FoundryIncomeAgent:
     def __init__(self):
         self.client = AIProjectClient.from_connection_string(
             credential=DefaultAzureCredential(),
-            conn_str="eastus2.api.azureml.ms;0dd70ca3-209c-42b7-8dbe-2de878b7b127;odl-sandbox-1660037-02;aironwomen",
+            conn_str="",
         )  
     
     async def get_EvidenceOfFraud_blob_path(self, userName: str) -> str:
@@ -81,7 +81,7 @@ class FoundryIncomeAgent:
         调用Foundry Agent获取调用web api获取用户欺诈风险调查结果
         """    
         try:
-            agent_definition = await self.client.agents.get_agent(agent_id="asst_cb5vNNrQzB8BDMGms51SMt7A")
+            agent_definition = await self.client.agents.get_agent(agent_id="")
             getBlobPath_agent = AzureAIAgent(client=self.client, definition=agent_definition)
             response = await getBlobPath_agent.get_response(messages=userName)
             

@@ -45,7 +45,7 @@ class FoundryIncomeAgent:
     def __init__(self):
         self.client = AIProjectClient.from_connection_string(
             credential=DefaultAzureCredential(),
-            conn_str="eastus2.api.azureml.ms;0dd70ca3-209c-42b7-8dbe-2de878b7b127;odl-sandbox-1660037-02;aironwomen",
+            conn_str="",
         )  
         # print(self.client)
     async def get_income_blob_path(self, filename: str) -> str:
@@ -53,7 +53,7 @@ class FoundryIncomeAgent:
         调用Foundry Agent获取收入证明的Blob路径
         """    
         try:
-            agent_definition = await self.client.agents.get_agent(agent_id="asst_cb5vNNrQzB8BDMGms51SMt7A")
+            agent_definition = await self.client.agents.get_agent(agent_id="")
             getBlobPath_agent = AzureAIAgent(client=self.client, definition=agent_definition)
             thread: AzureAIAgentThread = None
             response = await getBlobPath_agent.get_response(messages=filename, thread=thread)
@@ -79,8 +79,8 @@ class IncomeProofLoader:
     
     def __init__(self):
         self.client = BlobServiceClient(
-            account_url="https://hackathonfound1559274341.blob.core.windows.net",
-            credential="Foer+fIx7QM9ihnWxnwJrnRx/GA3YydT3UJ4vzVwr4xkfAdHoUacaOqx5CgVwt07vrgLl1N2IA3l+AStAfISnA=="
+            account_url="",
+            credential=""
         )
     
     async def load_income_data(self, blob_path: str) -> Dict[str, Any]:
@@ -110,8 +110,8 @@ class CreditEvaluator:
             AzureChatCompletion(
                 service_id="credit_ai",
                 deployment_name="gpt-4o-mini",
-                endpoint="https://hackathonfound6454649233.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview",
-                api_key="U4fD1XnytGhxvUlsRYSRL472aImrcK17LbNS5CQfGOTRpkWKAwpzJQQJ99BDACHYHv6XJ3w3AAAAACOGIngS",
+                endpoint="",
+                api_key="",
                 api_version="2024-12-01-preview"
             )
         )

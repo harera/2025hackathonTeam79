@@ -23,7 +23,7 @@ class CosmosDBClient:
     
     def __init__(self):
         self.client = CosmosClient.from_connection_string(
-            "AccountEndpoint=https://hackaloandb.documents.azure.com:443/;AccountKey=nBAAGrW3NayW8oLRgPh4LgJNE6aqidQRFsU12WVsOwjuOUYHFQGh3HyPPeTRYzVUwON1Gj3KE9SIACDbAsD3zQ==;"
+            "AccountEndpoint=h=;"
         )
     
     async def get_user_info(self, applicantId: str) -> Dict[str, Any]:
@@ -64,8 +64,8 @@ class ContractProofLoader:
     
     def __init__(self):
         self.client = BlobServiceClient(
-            account_url="https://hackathonfound1559274341.blob.core.windows.net",
-            credential="Foer+fIx7QM9ihnWxnwJrnRx/GA3YydT3UJ4vzVwr4xkfAdHoUacaOqx5CgVwt07vrgLl1N2IA3l+AStAfISnA=="
+            account_url="",
+            credential=""
         )
     async def load_contract_data(self, blob_path: str) -> Dict[str, Any]:
         """异步加载JSON格式的收入证明"""
@@ -92,8 +92,8 @@ class ComplianceReview:
             AzureChatCompletion(
                 service_id="credit_ai",
                 deployment_name="gpt-4o-mini",
-                endpoint="https://hackathonfound6454649233.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview",
-                api_key="U4fD1XnytGhxvUlsRYSRL472aImrcK17LbNS5CQfGOTRpkWKAwpzJQQJ99BDACHYHv6XJ3w3AAAAACOGIngS",
+                endpoint="",
+                api_key="",
                 api_version="2024-12-01-preview"
             )
         )
