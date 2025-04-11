@@ -107,7 +107,7 @@ class FraudEvaluator:
                 service_id="credit_ai",
                 deployment_name="gpt-4o-mini",
                 endpoint="https://hackathonfound6454649233.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview",
-                api_key="U4fD1XnytGhxvUlsRYSRL472aImrcK17LbNS5CQfGOTRpkWKAwpzJQQJ99BDACHYHv6XJ3w3AAAAACOGIngS",
+                api_key="U",
                 api_version="2024-12-01-preview"
             )
         )
