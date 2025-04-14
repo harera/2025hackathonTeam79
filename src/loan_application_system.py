@@ -1,22 +1,65 @@
 import os
-import autogen
+import sys
+import json
+import logging
+import asyncio
+from typing import Dict, Any
 from dotenv import load_dotenv
 import openai
-import asyncio  # 添加asyncio模块
-from credit_agent import CreditAnalysisAgent  # 导入CreditAnalysisAgent
-from fraud_agent import FoundryIncomeAgent  # 导入fraud_analysis_workflow
+import autogen
+from concurrent.futures import ThreadPoolExecutor
+from credit_agent import CreditAnalysisAgent, credit_analysis_workflow  # 导入CreditAnalysisAgent和credit_analysis_workflow
+from fraud_agent import FoundryIncomeAgent, fraud_analysis_workflow  # 导入fraud_analysis_workflow
 from decision_agent import LoanDecisionAgent  # 导入LoanDecisionAgent
+from datetime import datetime
+from compliance_agent import ComplianceReview, compliance_review_workflow
+import uuid
+import argparse
+import io
 
-# Load environment variables
+# 设置控制台输出编码为 UTF-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# 创建日志目录
+log_dir = "logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+# 生成日志文件名
+log_filename = os.path.join(log_dir, f"loan_application_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+# 配置根日志记录器
+logging.basicConfig(
+    level=logging.INFO,  # 默认日志级别设为 INFO
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_filename, encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# 设置特定模块的日志级别
+logging.getLogger('credit_evaluator').setLevel(logging.INFO)
+logging.getLogger('fraud_evaluator').setLevel(logging.INFO)
+logging.getLogger('httpcore').setLevel(logging.WARNING)  # 减少 HTTP 相关的日志输出
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('openai').setLevel(logging.WARNING)
+logging.getLogger('docker').setLevel(logging.WARNING)
+
+# 获取主应用程序的日志记录器
+logger = logging.getLogger('loan_application')
+
+# 加载环境变量
 load_dotenv()
 
-# Ensure OpenAI library uses the correct configuration
+# 确保OpenAI库使用正确的配置
 openai.api_type = "azure"
 openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
 openai.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
 openai.api_version = os.getenv("AZURE_OPENAI_API_VERSION")
 
-# Configure models for autogen
+# 配置autogen的模型
 config_list = [
     {
         "model": os.getenv("AZURE_OPENAI_DEPLOYMENT"),
@@ -27,148 +70,112 @@ config_list = [
     }
 ]
 
+# 定义llm_config
 llm_config = {
     "config_list": config_list,
     "temperature": 0.7,
+    "functions": []  # 移除预定义的函数列表，改为在注册时动态添加
+}
+
+# 配置Azure存储
+azure_storage_config = {
+    "connection_string": os.getenv("AZURE_STORAGE_CONNECTION_STRING"),
+    "container_name": os.getenv("AZURE_STORAGE_CONTAINER_NAME"),
+    "account_name": os.getenv("AZURE_STORAGE_ACCOUNT_NAME"),
+    "account_key": os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
+}
+
+# 配置Cosmos DB
+cosmos_config = {
+    "endpoint": os.getenv("COSMOS_ENDPOINT"),
+    "key": os.getenv("COSMOS_KEY"),
+    "database_name": os.getenv("COSMOS_DATABASE_NAME"),
+    "container_name": os.getenv("COSMOS_CONTAINER_NAME"),
+    "chat_container_name": os.getenv("COSMOS_CHAT_CONTAINER_NAME")
 }
 
 class LoanApplication:
     def __init__(self):
-        self.collected_data = {}
-        self.evaluation_results = {}
- 
-    def run(self):
-        print("=== 索尔维亚首都银行贷款评估系统 ===")
-        print("系统启动中...")
+        """初始化贷款申请系统"""
+        self.instance_id = str(uuid.uuid4())
+        self._configure_logging()
         
-        # 第一阶段: 信息收集
-        print("\n第一阶段: 信息收集")
-        success = self.phase_data_collection()
+        # 初始化分析结果
+        self.credit_result = None
+        self.fraud_result = None
+        self.compliance_result = None
+        self.decision_result = None
         
-        # 如果数据收集成功，进入评估阶段
-        if success and self.collected_data:
-            print("\n第二阶段: 贷款评估")
-            self.phase_evaluation()
-            
-            # 展示最终结果
-            if self.evaluation_results and "未能获取" not in self.evaluation_results and "评估失败" not in self.evaluation_results:
-                print("\n=== 贷款申请评估流程已完成 ===")
-                print("感谢您使用索尔维亚首都银行贷款评估系统!")
-            else:
-                print("\n=== 评估过程未能正常完成 ===")
-                print("请联系客服获取帮助。")
-        else:
-            print("\n数据收集未成功完成，无法进行评估。")
-            print("请重新启动系统并完成信息收集。")
-            
-        print("\n系统即将退出...")
+        # 初始化决策代理
+        self.decision_agent = LoanDecisionAgent()
         
-    def phase_data_collection(self):
-        # 创建数据收集agent
-        data_collector = autogen.AssistantAgent(
-            name="DataCollector",
-            system_message="""你是索尔维亚首都银行的贷款审核助手。
-            首先，主动欢迎用户并介绍自己，表明你是索尔维亚首都银行的贷款服务助手，询问用户有什么可以帮助的。
-            
-            你需要有序地收集以下信息:
-            1. 姓名
-            2. 年龄
-            3. 电话
-            4. 电子邮件
-            5. 地址
-            6. 工作单位
-            7. 职务
-            8. 月收入
-            9. 贷款金额
-            10. 贷款用途
-            11. 贷款期限（月）
-            12. 房屋地址
-            13. 贷款开始日期
-            14. 房屋面积（平方米）
-            
-            请一个一个地提问，保持对话流畅友好。在完成所有必要信息的收集之前，继续对话。
-            分析提供数据是否符合索尔维亚首都银行贷款申请要求，如果符合，则继续收集信息，否则，请用户修改信息。
-            如果用户一次性提交了所有信息，直接分析数据是否符合索尔维亚首都银行贷款申请要求，如果符合，则继续收集信息，否则，请用户修改信息。
+        # 初始化会话和连接器列表
+        self._sessions = []
+        self._connectors = []
 
-            当所有信息收集完毕，请提供格式化摘要:
-            收集的数据摘要:
-            - 姓名: [姓名]
-            - 年龄: [年龄]
-            - 电话: [电话]
-            - 电子邮件: [电子邮件]
-            - 地址: [地址]
-            - 工作单位: [工作单位]
-            - 职务: [职务]
-            - 月收入: [月收入]
-            - 贷款金额: [贷款金额]
-            - 贷款用途: [贷款用途]
-            - 贷款期限: [贷款期限]
-            - 房屋地址: [房屋地址]
-            - 贷款开始日期: [贷款开始日期]
-            - 房屋面积: [房屋面积]
-            
-            收集完所有信息请添加标记"DATA_COLLECTION_COMPLETE"表示数据收集已完成。此句话不用告知用户
-            DATA_COLLECTION_COMPLETE单独一行，不要与任何其他内容混杂在一起。
-            """,
-            llm_config=llm_config,
-        )
-        
-        # 创建用户代理，接收用户输入
-        user_proxy = autogen.UserProxyAgent(
-            name="User",
-            human_input_mode="ALWAYS",  # 一直请求人工输入
-            is_termination_msg=lambda x: "DATA_COLLECTION_COMPLETE" in x.get("content", ""),
-            code_execution_config=False
-        )
-        
-        # 提示用户输入信息
-        print("\n=== 索尔维亚首都银行贷款申请系统 ===")
-        print("欢迎使用索尔维亚首都银行贷款申请系统。")
-        print("我将帮助您收集贷款申请所需的信息。请根据提示完成信息输入。\n")
-        
+    async def run(self):
+        """运行贷款申请流程"""
         try:
-            # 启动与数据收集Agent的对话
-            print("正在连接贷款顾问，请稍候...\n")
+            # 第一阶段：数据收集
+            print("\n第一阶段: 数据收集")
+            success = await self.data_collection()
             
-            # 这里添加初始消息，让DataCollector开始对话
-            chat_result = user_proxy.initiate_chat(
-                data_collector,
-                message="我想申请贷款"
-            )
-            
-            # 提取收集到的数据
-            final_message = None
-            for message in reversed(user_proxy.chat_messages[data_collector]):
-                if "DATA_COLLECTION_COMPLETE" in message.get("content", ""):
-                    final_message = message.get("content", "")
-                    break
-            
-            if final_message:
-                # 从最终消息中提取结构化数据
-                self.collected_data = self.parse_collected_data(final_message)
-                
-                # 确认收集到的数据
-                print("\n收集的数据摘要:")
-                loan_application = LoanApplication()
-                for key, value in loan_application.collected_data.items():
-                    print(f"- {key}: {value}")
-                
-                # 询问用户是否同意
-                agreement = input("\n索尔维亚首都银行将使用以上个人信息进行贷款审核，您是否同意? (同意/不同意): ")
-                
-                if agreement == "同意":
-                    print("\n信息收集完成!")
-                    print("正在进入评估阶段...")
-                    return True
-                else:
-                    print("\n您未同意信息使用条款，申请流程终止。")
-                    return False
-            else:
-                print("\n未能成功完成数据收集。")
-                return False
+            # 第二阶段：贷款评估
+            if success and self.collected_data:
+                print("\n第二阶段: 贷款评估")
+                await self.phase_evaluation()
                 
         except Exception as e:
-            print(f"数据收集过程中出错: {e}")
+            logging.error(f"贷款申请流程出错: {str(e)}")
+            return {"status": "error", "error_message": str(e)}
+            
+        return {"status": "completed", "application_id": self.collected_data.get("application_id")}
+    
+    async def data_collection(self):
+        """收集贷款申请数据"""
+        try:
+            print("\n=== 数据收集阶段 ===")
+            
+            # 创建数据收集agent
+            data_collector = autogen.AssistantAgent(
+                name="DataCollector",
+                system_message="""你是数据收集专家，负责:
+                    1. 收集贷款申请所需的所有信息
+                    2. 确保数据的完整性和准确性
+                    3. 验证数据的有效性""",
+                llm_config={
+                    "config_list": config_list,
+                    "functions": []
+                }
+            )
+            
+            # 创建用户代理
+            user_proxy = autogen.UserProxyAgent(
+                name="User",
+                system_message="你代表贷款申请人，负责提供申请所需的信息。",
+                human_input_mode="ALWAYS",
+                code_execution_config=False
+            )
+            
+            # 启动数据收集对话
+            chat_result = await user_proxy.initiate_chat(
+                data_collector,
+                message="请帮助我收集贷款申请所需的信息。"
+            )
+            
+            # # 提取收集到的数据
+            # for message in chat_result.chat_history:
+            #     if "DATA_COLLECTION_COMPLETE" in message.get("content", ""):
+            #         # 解析数据
+            #         data = self.parse_collected_data(message.get("content", ""))
+            #         if data:
+            #             self.collected_data = data
+            #             return True
+            
+            # return False
+            
+        except Exception as e:
+            logging.error(f"数据收集过程出错: {str(e)}")
             return False
     
     def parse_collected_data(self, summary):
@@ -204,350 +211,169 @@ class LoanApplication:
             # 如果格式不符合预期则使用备用方案
             return {"summary": summary}
     
-    def phase_evaluation(self):
-        # 打印评估开始提示
-        print("\n=== 开始贷款评估阶段 ===")
-        print("系统正在启动贷款评审团队，这可能需要一些时间，请耐心等待...\n")
-        
-        # 准备评估数据
-        loan_data = ""
-        for key, value in self.collected_data.items():
-            loan_data += f"- {key}: {value}\n"
-        
-        print(f'loan_data:{loan_data}')
-
-        # 创建信用分析后端实例
-        credit_analysis_instance = CreditAnalysisAgent()
-        
-        # 封装异步调用函数
-        def run_credit_analysis(certificate_file, bank_statement_file):
-            """同步包装器，调用异步信用分析功能"""
-            certificate_file = "yinhangliushui.png"
-            bank_statement_file = "zhangsanzaizhi.png"
-            result = asyncio.run(credit_analysis_instance.analyze_credit(
-                certificate_file, bank_statement_file))
-            return f"信用分析结果: {result['origin_result']['assessment']}" if result['origin_result']['status'] == "success" else f"信用分析失败: {result['origin_result'].get('message', '未知错误')}"
-
-
-        fraud_agent = FoundryIncomeAgent()
-        # 封装欺诈分析异步调用函数
-        def run_fraud_analysis(user_id):
-            """同步包装器，调用异步欺诈分析功能"""
-            # 使用固定的测试ID
-            test_user_id = "08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca"
-            print(f"正在进行欺诈分析，用户ID: {test_user_id}")
-            result = asyncio.run(fraud_agent.fraud_analysis_workflow(test_user_id))
-            if isinstance(result, str):
-                return f"欺诈分析结果: {result}"
-            elif isinstance(result, dict) and 'status' in result and result['status'] == 'error':
-                return f"欺诈分析失败: {result.get('message', '未知错误')}"
-            else:
-                return f"欺诈分析结果: {result}"
-                
-        # 创建决策分析后端实例
-        decision_analysis_instance = LoanDecisionAgent()
-        
-        # 创建专家结果跟踪字典
-        self.expert_results = {
-            "credit": None,
-            "fraud": None,
-            "compliance": None
-        }
-        
-        # 封装初始决策分析异步调用函数
-        def run_initial_analysis(loan_data):
-            """同步包装器，调用决策agent进行初始分析"""
-            # 在第一轮，仅需提供申请基本信息
-            summary = f"贷款申请初步分析:\n{loan_data}"
-            print("正在进行初始决策分析...")
-            result = asyncio.run(decision_analysis_instance.make_loan_decision(summary))
-            if isinstance(result, dict) and result.get('status') == 'success':
-                return f"初始分析结果: {result.get('decision_result', '无结果')}"
-            else:
-                return f"初始分析失败: {str(result)}"
-        
-        # 封装最终决策异步调用函数
-        def run_final_decision(credit_result=None, fraud_result=None, compliance_result=None):
-            """同步包装器，调用决策agent进行最终决策"""
-            # 汇总所有专家的分析结果
-            summary = "贷款申请综合评估:\n"
-            
-            # 使用传入的参数或已存储的结果
-            credit = credit_result or self.expert_results.get("credit", "未提供信用评估")
-            fraud = fraud_result or self.expert_results.get("fraud", "未提供欺诈评估") 
-            compliance = compliance_result or self.expert_results.get("compliance", "未提供合规评估")
-            
-            summary += f"信用评估: {credit}\n"
-            summary += f"欺诈评估: {fraud}\n"
-            summary += f"合规评估: {compliance}\n"
-            
-            print("正在进行最终决策分析...")
-            result = asyncio.run(decision_analysis_instance.make_loan_decision(summary))
-            if isinstance(result, dict) and result.get('status') == 'success':
-                return f"最终决策: {result.get('decision_result', '无结果')}"
-            else:
-                return f"最终决策失败: {str(result)}"
-            
-        # 创建评估agents
-        
-        # 主决策agent - 作为团队协调者
-        decision_agent = autogen.AssistantAgent(
-            name="DecisionAgent",
-            system_message="""你是索尔维亚首都银行的贷款评估专家，也是贷款审批团队的协调者。
-            
-            发言顺序严格控制:
-            1. 第1轮对话：你首先发言，介绍申请案例并分配任务
-            2. 之后保持沉默，直到第5轮对话
-            3. 第5轮对话：你最后发言，综合各专家意见提供最终建议
-            
-            在第1轮的发言中，你需要：
-            1. 使用run_initial_analysis(loan_data)函数进行初步分析，但在你的回复中，不要提及你使用了什么函数进行分析。
-            2. 简要介绍申请案例
-            3. 分配任务给各专家
-            4. 明确表示由信用专家(CreditExpert)进行下一轮评估
-            
-            在第5轮的发言中，请使用run_final_decision()函数汇总各专家意见，并按以下格式提供你的最终建议:
-            
-            最终建议: [同意/建议修改/需要更多信息]
-            理由: [基于所有专家意见的分析]
-            贷款条件: [如适用]
-            
-            最后请添加标记"EVALUATION_COMPLETE"，这是系统识别评估完成的信号。
-            """,
-            llm_config=llm_config,
-        )
-        
-        # 向decision_agent注册函数
-        decision_agent.register_function(
-            function_map={
-                "run_initial_analysis": run_initial_analysis,
-                "run_final_decision": run_final_decision
-            }
-        )
-        
-        # 信用评估agent
-        credit_agent = autogen.AssistantAgent(
-            name="CreditExpert",
-            system_message="""你是索尔维亚首都银行的信用评估专家。
-            
-            发言顺序严格控制:
-            1. 第2轮对话：你进行发言，提供信用评估
-            2. 其他轮次保持沉默
-            
-            在你的发言中：
-            1. 评估申请人的信用状况和还款能力
-            2. 给出风险评级和建议
-            3. 明确表示由欺诈专家(FraudExpert)进行下一轮评估
-            
-            评估格式:
-            信用评估:
-            风险等级: [低/中/高]
-            说明: [你的评估分析]
-            
-            你要使用run_credit_analysis(certificate_file, bank_statement_file)函数
-            来获取深度的信用分析结果。该函数会返回包含信用等级(A/B/C)和风险摘要的分析报告。
-            
-            示例调用:
-            run_credit_analysis("ZhangSanZaiZhi.png", "ZhangSanLiuShui.png")
-            
-            在分析贷款申请时，你应该:
-            1. 首先调用run_credit_analysis函数进行深度分析
-            2. 将分析结果整合到你的评估中
-            3. 提供最终的信用评估结论
-            但在你的回复中，不要提及你使用了什么函数进行分析，直接分享分析结果即可。
-            """,
-            llm_config=llm_config,
-        )
-        
-        # 向credit_agent注册函数
-        credit_agent.register_function(
-            function_map={
-                "run_credit_analysis": run_credit_analysis
-            }
-        )
-        
-        # 欺诈检测agent
-        fraud_agent = autogen.AssistantAgent(
-            name="FraudExpert",
-            system_message="""你是索尔维亚首都银行的欺诈风险评估专家。
-            
-            发言顺序严格控制:
-            1. 第3轮对话：你进行发言，提供欺诈风险评估
-            2. 其他轮次保持沉默
-            
-            在你的发言中：
-            1. 分析潜在的欺诈风险
-            2. 评估申请材料的真实性
-            3. 明确表示由合规专家(ComplianceExpert)进行下一轮评估
-            
-            评估格式:
-            欺诈风险评估:
-            风险等级: [低/中/高]
-            说明: [你的评估分析]
-            
-            你要使用run_fraud_analysis(user_id)函数获取深度欺诈分析结果。
-            该函数会返回包含风险分析和欺诈风险摘要的分析报告。
-            
-            示例调用:
-            run_fraud_analysis("08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca")
-            
-            在评估申请时，你应该:
-            1. 调用run_fraud_analysis函数进行深度分析
-            2. 将分析结果整合到自己的评估中
-            3. 提供最终的欺诈风险评估结论
-            """,
-            llm_config=llm_config,
-        )
-        
-        # 向fraud_agent注册函数
-        fraud_agent.register_function(
-            function_map={
-                "run_fraud_analysis": run_fraud_analysis
-            }
-        )
-        
-        # 合规审查agent
-        compliance_agent = autogen.AssistantAgent(
-            name="ComplianceExpert",
-            system_message="""你是索尔维亚首都银行的合规审查专家。
-            
-            发言顺序严格控制:
-            1. 第4轮对话：你进行发言，提供合规审查
-            2. 其他轮次保持沉默
-            
-            在你的发言中：
-            1. 确保申请符合监管要求
-            2. 审查文件完整性与合规性
-            3. 明确表示由决策专家(DecisionAgent)做出最终决策
-            
-            评估格式:
-            合规审查:
-            合规状态: [符合/不符合/需补充]
-            说明: [你的评估分析]
-            """,
-            llm_config=llm_config,
-        )
-        
-        # 创建贷款评审团队
-        loan_review_team = autogen.GroupChat(
-            agents=[decision_agent, credit_agent, fraud_agent, compliance_agent],
-            messages=[],
-            max_round=6  # 精确控制6轮对话：1.决策专家 2.信用专家 3.欺诈专家 4.合规专家 5.决策专家总结
-        )
-        
-        # 设置决策专家为第一个发言者
-        loan_review_team.next_agent = decision_agent
-        
-        loan_review_manager = autogen.GroupChatManager(groupchat=loan_review_team, llm_config=llm_config)
-        
-        # 准备评估数据
-        # 申请人提供的雇佣证明文件: {self.collected_data.get('employment_certificate', 'ZhangSanZaiZhi.png')}
-        # 申请人提供的银行流水文件: {self.collected_data.get('bank_statement', 'ZhangSanLiuShui.png')}
-        # 申请人用户ID: {self.collected_data.get('user_id', '08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca')}
-        loan_request = f"""
-        申请数据:
-        {loan_data}
-        
-        
-        
-        请对这份贷款申请进行评估。请严格按照以下轮次发言:
-        第1轮：决策专家(DecisionAgent)介绍并分配任务
-        第2轮：信用专家(CreditExpert)进行信用评估
-        第3轮：欺诈专家(FraudExpert)进行欺诈风险评估
-        第4轮：合规专家(ComplianceExpert)进行合规审查
-        第5轮：决策专家(DecisionAgent)提供最终决策
-        
-        每位专家只在自己的指定轮次发言，其他时间保持沉默。
-        请开始评估流程。
-        """
-        
-        # 启动团队评审流程
-        print("正在提交贷款申请到评审团队...")
-        
+    async def phase_evaluation(self, test_data=None, session=None):
+        """贷款评估阶段"""
         try:
-            # 创建一个不依赖termination的用户代理，完全依靠max_round来控制对话结束
-            basic_user_proxy = autogen.UserProxyAgent(
-                name="BasicUserProxy",
-                human_input_mode="NEVER",  # 确保不需要人工干预
-                is_termination_msg=None,   # 不使用终止条件
-                llm_config=None,           # 不需要LLM配置
-                system_message="仅用于启动对话，不参与评估。"
+            self.logger.info("开始贷款评估阶段")
+            
+            # 如果有测试数据，使用测试数据
+            if test_data:
+                self.collected_data = test_data
+                self.logger.info("使用测试数据进行评估")
+            
+            # 创建专家代理
+            agents = [
+                DecisionAgent(
+                    name="DecisionAgent",
+                    llm_config=llm_config
+                ),
+                CreditExpert(
+                    name="CreditExpert", 
+                    llm_config=llm_config
+                ),
+                FraudExpert(
+                    name="FraudExpert", 
+                    llm_config=llm_config
+                ),
+                ComplianceExpert(
+                    name="ComplianceExpert", 
+                    llm_config=llm_config
+                )
+            ]
+            self.logger.info("专家代理创建完成")
+            
+            # 为每个代理注册函数
+            for agent in agents:
+                register_functions(agent)
+            
+            # 创建用户代理
+            user_proxy = autogen.UserProxyAgent(
+                name="user_proxy",
+                human_input_mode="NEVER",
+                max_consecutive_auto_reply=10,
+                is_termination_msg=lambda x: "EVALUATION_COMPLETE" in x.get("content", ""),
+                code_execution_config={"work_dir": "workspace"},
+                llm_config=llm_config,
+                system_message="""你是一个贷款申请人的代理。你的职责是：
+                1. 提供申请人的详细信息
+                2. 回答评估过程中的问题
+                3. 配合完成整个评估流程
+                4. 确保所有必要信息都已提供"""
             )
             
-            # 启动团队评审流程
-            print("启动评估流程，最多进行6轮对话...")
-            basic_user_proxy.initiate_chat(
-                loan_review_manager,
-                message=loan_request
+            # 创建群组聊天
+            groupchat = autogen.GroupChat(
+                agents=[user_proxy] + agents,
+                messages=[],
+                max_round=15
             )
-            print("评估对话已完成！")
             
-            # 提取评估结果
-            messages = loan_review_team.messages
-            print(f"处理{len(messages)}条消息...")
+            # 创建群组聊天管理器
+            chat_manager = autogen.GroupChatManager(
+                groupchat=groupchat,
+                llm_config=llm_config
+            )
             
-            final_decision = self.extract_decision_from_messages(messages)
+            # 获取评估数据
+            evaluation_data = await self.get_evaluation_data()
             
-            # 保存最终评估结果
-            self.evaluation_results = final_decision
+            # 执行信用分析
+            credit_result = await self.run_credit_analysis(
+                certificate_file=evaluation_data['证明文件']['工作证明'],
+                bank_statement_file=evaluation_data['证明文件']['银行流水']
+            )
             
-            print("\n=== 评估完成! ===")
-            print("最终建议:\n", self.evaluation_results)
+            # 执行欺诈分析
+            fraud_result = await self.run_fraud_analysis(
+                evaluation_data['证明文件']['用户ID']
+            )
             
-        except Exception as e:
-            print(f"评估过程中出错: {e}")
-            print("无法完成贷款评估，请联系系统管理员。")
-            self.evaluation_results = "评估失败: " + str(e)
-    
-    def extract_decision_from_messages(self, messages):
-        """从对话历史中提取决策结果"""
-        print(f"\n开始提取决策结果，处理{len(messages)}条消息...")
-        
-        # 打印消息内容以便调试
-        # for i, msg in enumerate(messages):
-        #     if isinstance(msg, dict):
-        #         name = msg.get("name", "未知")
-        #         content_length = len(str(msg.get("content", "")))
-        #         print(f"消息 {i+1} - 发送者: {name}, 内容长度: {content_length}")
+            # 执行合规分析
+            compliance_result = await self.run_compliance_analysis(
+                evaluation_data['证明文件']['用户ID']
+            )
+
+            # 执行决策分析
+            decision_result = await self.run_decision_analysis(
+                evaluation_data['证明文件']['用户ID']
+            )
+            
+            # 启动群聊评估并获取结果
+            self.logger.info("开始群组聊天评估")
+            chat_result = await chat_manager.a_initiate_chat(
+                agents[1],  # credit_expert
+                message=f"""
+            
+请评估以下贷款申请：
+
+申请人信息：
+{json.dumps(evaluation_data['申请人信息'], ensure_ascii=False, indent=2)}
+
+工作信息：
+{json.dumps(evaluation_data['工作信息'], ensure_ascii=False, indent=2)}
+
+贷款信息：
+{json.dumps(evaluation_data['贷款信息'], ensure_ascii=False, indent=2)}
+
+证明文件：
+{json.dumps(evaluation_data['证明文件'], ensure_ascii=False, indent=2)}
+
+信用分析结果：
+{json.dumps(credit_result, ensure_ascii=False, indent=2)}
+
+欺诈分析结果：
+{json.dumps(fraud_result, ensure_ascii=False, indent=2)}
+
+合规分析结果：
+{json.dumps(compliance_result, ensure_ascii=False, indent=2)}
+
+决策结果：
+{json.dumps(decision_result, ensure_ascii=False, indent=2)}
+
+请开始评估。
+"""
+            )
+            self.logger.info(f"群组聊天完成，聊天历史长度: {len(chat_result.chat_history) if chat_result and hasattr(chat_result, 'chat_history') else 0}")
+
+            # 收集agent消息
+            self.logger.info("开始收集agent消息")
+            agent_messages = self.collect_expert_messages(chat_result.chat_history)
+            self.logger.info(f"收集到 {len(agent_messages)} 条agent消息")
+            
+            # 构建评估结果
+            evaluation_result = {
+                "status": "completed",
+                "application_id": self.collected_data.get("application_id"),
+                "agent_messages": agent_messages
+            }
+            self.logger.info("评估结果构建完成")
+
+            # 存入会话
+            if session:
+                self.logger.info("开始将消息存入会话")
+                if "chat_history" not in session:
+                    session["chat_history"] = []
+                    self.logger.info("创建新的chat_history列表")
                 
-        #         # 捕获专家评估结果
-        #         if name == "CreditExpert" and self.expert_results["credit"] is None:
-        #             self.expert_results["credit"] = msg.get("content", "")
-        #             print(f"已捕获信用专家评估，长度: {len(self.expert_results['credit'])}")
-        #         elif name == "FraudExpert" and self.expert_results["fraud"] is None:
-        #             self.expert_results["fraud"] = msg.get("content", "")
-        #             print(f"已捕获欺诈专家评估，长度: {len(self.expert_results['fraud'])}")
-        #         elif name == "ComplianceExpert" and self.expert_results["compliance"] is None:
-        #             self.expert_results["compliance"] = msg.get("content", "")
-        #             print(f"已捕获合规专家评估，长度: {len(self.expert_results['compliance'])}")
-        #     else:
-        #         print(f"消息 {i+1} - 类型: {type(msg)}")
-        
-        # 寻找最后一条决策专家的消息
-        for message in reversed(messages):
-            if isinstance(message, dict) and message.get("name") == "DecisionAgent":
-                content = message.get("content", "")
-                if content and isinstance(content, str):
-                    print(f"找到决策专家的最终消息")
-                    return content
-        
-        # 如果没有找到决策专家的消息，尝试查找任何包含"最终建议"的消息
-        for message in reversed(messages):
-            if isinstance(message, dict):
-                content = message.get("content", "")
-                if content and isinstance(content, str) and "最终建议:" in content:
-                    print(f"找到包含最终建议的消息")
-                    return content
-        
-        # 尝试从最后一条消息提取结果
-        if messages and isinstance(messages[-1], dict) and "content" in messages[-1]:
-            return messages[-1]["content"]
-        
-        return "未能获取完整评估结果"
-    
+                for msg in evaluation_result['agent_messages']:
+                    session["chat_history"].append({
+                        "role": msg['name'],
+                        "content": msg['content']
+                    })
+                self.logger.info(f"会话存储完成，当前chat_history长度: {len(session['chat_history'])}")
+            else:
+                self.logger.warning("session对象不存在，无法存储会话历史")
+            
+            print("\n=== 会话履历 ===")
+            print(evaluation_result)
+            return evaluation_result
+
+        except Exception as e:
+            self.logger.error(f"贷款评估失败: {str(e)}", exc_info=True)
+            raise
+
     # 添加测试数据生成功能，方便调试    
     def generate_test_data(self):
-
         """生成测试数据，方便调试"""
         self.collected_data = {
             "姓名": "张三",
@@ -564,38 +390,496 @@ class LoanApplication:
             "房屋地址": "北京市海淀区",
             "贷款开始日期": "2024年1月1日",
             "房屋面积": "120平方米",
-            "employment_certificate": "ZhangSanZaiZhi.png",
-            "bank_statement": "ZhangSanLiuShui.png",
-            "user_id": "08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca"
+            "employment_certificate": "yinhangliushui.png",  # 修正文件名
+            "bank_statement": "zhangsanzaizhi.png",  # 修正文件名
+            "user_id": "08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca",
+            "application_id": "08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca",
+            "session": "08c6c7e1-023d-4d21-a3d2-bb2d32efc7ca",
+            "chat_history": []
         }
         print("已生成测试数据:")
-        loan_application = LoanApplication()
-        for key, value in loan_application.collected_data.items():
+        for key, value in self.collected_data.items():
             print(f"- {key}: {value}")
-        return loan_application.collected_data
+        return self.collected_data
+
+    async def run_initial_analysis(self, loan_data):
+        """执行初始贷款分析"""
+        try:
+            print("\n=== 执行初始分析 ===")
+            print(f"分析数据: {loan_data}")
+            
+            # 执行分析
+            result = await self.decision_agent.make_loan_decision(loan_data)
+            
+            if isinstance(result, dict) and result.get('status') == 'success':
+                return f"初始分析结果: {result.get('decision_result', '无结果')}"
+            else:
+                return f"初始分析失败: {str(result)}"
+                
+        except Exception as e:
+            logging.error(f"初始分析过程出错: {str(e)}")
+            return f"初始分析失败: {str(e)}"
+
+    async def run_credit_analysis(self, certificate_file: str, bank_statement_file: str) -> Dict[str, Any]:
+        """执行信用分析"""
+        try:
+            self.logger.info("开始信用分析")
+            result = await credit_analysis_workflow(certificate_file, bank_statement_file)
+            self.credit_result = result
+            return result
+        except Exception as e:
+            self.logger.error(f"信用分析失败: {str(e)}")
+            return {"status": "error", "message": str(e)}
+
+    async def run_fraud_analysis(self, user_id: str) -> Dict[str, Any]:
+        """执行欺诈分析"""
+        try:
+            self.logger.info("开始欺诈分析")
+            result = await fraud_analysis_workflow(user_id)
+            self.fraud_result = result
+            return result
+        except Exception as e:
+            self.logger.error(f"欺诈分析失败: {str(e)}")
+            return {"status": "error", "message": str(e)}
+
+    async def run_compliance_analysis(self, user_id: str) -> Dict[str, Any]:
+        """执行合规分析"""
+        try:
+            self.logger.info("开始合规分析")
+            result = await compliance_review_workflow(user_id)
+            self.compliance_result = result
+            return result
+        except Exception as e:
+            self.logger.error(f"合规分析失败: {str(e)}")
+            return {"status": "error", "message": str(e)}
+
+    async def run_decision_analysis(self, user_id: str) -> Dict[str, Any]:
+        """执行决策分析"""
+        try:
+            self.logger.info("开始决策分析")
+            
+            # 检查所有分析结果是否就绪
+            if not all([self.credit_result, self.fraud_result, self.compliance_result]):
+                raise ValueError("缺少必要的分析结果")
+            
+            # 准备决策分析输入
+            summary = {
+                "credit_analysis": self.credit_result,
+                "fraud_analysis": self.fraud_result,
+                "compliance_analysis": self.compliance_result
+            }
+            
+            # 调用决策分析
+            result = await self.decision_agent.make_loan_decision(json.dumps(summary, ensure_ascii=False))
+            self.decision_result = result
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"决策分析失败: {str(e)}")
+            return {"status": "error", "message": str(e)}
+
+    async def run_final_decision(self, credit_result=None, fraud_result=None, compliance_result=None):
+        """执行最终决策分析
+        
+        Args:
+            credit_result: 信用分析结果
+            fraud_result: 欺诈分析结果
+            compliance_result: 合规分析结果
+            
+        Returns:
+            Dict[str, Any]: 决策结果
+        """
+        session = None
+        try:
+            # 使用传入的结果或已存储的结果
+            self.credit_result = credit_result or self.credit_result
+            self.fraud_result = fraud_result or self.fraud_result
+            self.compliance_result = compliance_result or self.compliance_result
+            
+            # 检查是否所有必要的分析都已完成
+            if not all([self.credit_result, self.fraud_result, self.compliance_result]):
+                raise ValueError("缺少必要的分析结果，请先完成所有分析")
+            
+            # 准备决策摘要
+            summary = {
+                "credit_analysis": self.credit_result,
+                "fraud_analysis": self.fraud_result,
+                "compliance_analysis": self.compliance_result
+            }
+            
+            # 调用决策代理
+            result = await self.decision_agent.make_loan_decision(json.dumps(summary, ensure_ascii=False))
+            
+            if isinstance(result, dict) and result.get('status') == 'success':
+                self.logger.info("最终决策分析完成")
+                return result
+            else:
+                error_msg = "最终决策分析失败: 无效的结果格式"
+                self.logger.error(error_msg)
+                return {"status": "error", "error": error_msg}
+                
+        except Exception as e:
+            error_msg = f"最终决策分析错误: {str(e)}"
+            self.logger.error(error_msg)
+            return {"status": "error", "error": error_msg}
+        finally:
+            if session:
+                await session.close()
+
+    def display_decision_result(self, result):
+        """显示决策结果"""
+        if result is None:
+            self.logger.error("未能获取决策结果")
+            return
+        
+        try:
+            # 如果result已经是字典，直接使用
+            if isinstance(result, dict):
+                result_dict = result
+            else:
+                # 如果是字符串，尝试解析为JSON
+                result_dict = json.loads(result)
+            
+            if "assessment" in result_dict:
+                print(result_dict["assessment"])
+            else:
+                print("\n=== 评估结果 ===")
+                print(json.dumps(result_dict, ensure_ascii=False, indent=2))
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            # 如果解析失败或不是预期格式，直接显示结果
+            print("\n=== 评估结果 ===")
+            print(result)
+        
+        self.logger.info("贷款评估流程已完成，结果已显示")
+
+    def _configure_logging(self):
+        """配置日志系统"""
+        # 创建日志目录
+        log_dir = "logs"
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        # 生成日志文件名
+        log_filename = os.path.join(log_dir, f"loan_application_{self.instance_id}.log")
+
+        # 配置文件处理器
+        file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(file_formatter)
+
+        # 配置logger
+        self.logger = logging.getLogger(f"loan_application_{self.instance_id}")
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(file_handler)
+        self.logger.propagate = False
+
+    async def get_evaluation_data(self) -> Dict[str, Any]:
+        """获取评估所需的数据"""
+        try:
+            self.logger.info("开始获取评估数据")
+            
+            # 从收集的数据中提取评估所需的信息
+            evaluation_data = {
+                "申请人信息": {
+                    "姓名": self.collected_data.get("name"),
+                    "年龄": self.collected_data.get("age"),
+                    "电话": self.collected_data.get("phone"),
+                    "电子邮件": self.collected_data.get("email"),
+                    "地址": self.collected_data.get("address")
+                },
+                "工作信息": {
+                    "工作单位": self.collected_data.get("company"),
+                    "职务": self.collected_data.get("position"),
+                    "月收入": self.collected_data.get("monthly_income")
+                },
+                "贷款信息": {
+                    "贷款金额": self.collected_data.get("loan_amount"),
+                    "贷款用途": self.collected_data.get("loan_purpose"),
+                    "贷款期限": self.collected_data.get("loan_term")
+                },
+                "证明文件": {
+                    "工作证明": self.collected_data.get("employment_certificate"),
+                    "银行流水": self.collected_data.get("bank_statement"),
+                    "用户ID": self.collected_data.get("user_id")
+                }
+            }
+            
+            self.logger.info("评估数据准备完成")
+            return evaluation_data
+            
+        except Exception as e:
+            self.logger.error(f"获取评估数据失败: {str(e)}")
+            raise
+
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步上下文管理器出口，确保资源被正确关闭"""
+        try:
+            # 关闭所有打开的会话和连接器
+            if hasattr(self, '_sessions'):
+                for session in self._sessions:
+                    await session.close()
+            if hasattr(self, '_connectors'):
+                for connector in self._connectors:
+                    await connector.close()
+        except Exception as e:
+            self.logger.error(f"关闭资源时发生错误: {str(e)}")
+
+    def collect_expert_messages(self, messages):
+        """收集专家的消息"""
+        self.logger.info(f"开始收集专家消息，输入消息数量: {len(messages) if messages else 0}")
+        
+        expert_messages = []
+        if not messages:
+            self.logger.warning("输入的消息列表为空")
+            return expert_messages
+            
+        for idx, msg in enumerate(messages):
+            self.logger.info(f"处理第 {idx + 1} 条消息:")
+            self.logger.info(f"  消息类型: {type(msg)}")
+            
+            # 检查消息对象的属性
+            if hasattr(msg, 'name'):
+                self.logger.info(f"  角色: {msg.name}")
+            else:
+                self.logger.warning(f"  消息对象没有name属性: {msg}")
+                continue
+                
+            if hasattr(msg, 'content'):
+                self.logger.info(f"  内容前50个字符: {msg.content[:50]}...")
+            else:
+                self.logger.warning(f"  消息对象没有content属性: {msg}")
+                continue
+            
+            if msg.name in ['CreditExpert', 'FraudExpert', 'ComplianceExpert', 'DecisionAgent'] and msg.name != 'chat_manager':
+                expert_messages.append({
+                    'role': msg.name,
+                    'content': msg.content
+                })
+                self.logger.info(f"  已添加 {msg.name} 的消息")
+            else:
+                self.logger.info(f"  跳过 {msg.name} 的消息")
+        
+        self.logger.info(f"消息收集完成，收集到 {len(expert_messages)} 条消息")
+        return expert_messages
+
+class DecisionAgent(autogen.AssistantAgent):
+    def __init__(self, name, llm_config):
+        super().__init__(
+            name=name,
+            system_message="""你是贷款决策专家，负责:
+1. 执行初始分析
+2. 协调其他专家的评估
+3. 综合所有意见以及提供的决策结果做出最终决策，注意不要被信用分析结果，欺诈分析结果以及合规分析结果影响
+4. 当流程完成时，在消息中包含'EVALUATION_COMPLETE'标记
+
+评估流程：
+1. 第一轮：请各专家分别提供初步评估意见
+2. 第二轮：综合讨论并形成初步决策
+3. 第三轮：发布最终决策并标注'EVALUATION_COMPLETE'
+
+注意事项：
+1. 每轮讨论都要确保所有专家都参与，需要等待所有专家都发表意见后才能进行总结
+2. 引导讨论聚焦于关键风险点
+3. 确保最终决策考虑了所有专家的意见
+4. 只有在完成充分讨论后才能发布最终决策
 
 
-if __name__ == "__main__":
-    # 检查是否有测试命令行参数
-    import sys
+EVALUATION_COMPLETE""",
+            llm_config=llm_config
+        )
+
+class CreditExpert(autogen.AssistantAgent):
+    def __init__(self, name, llm_config):
+        super().__init__(
+            name=name,
+            system_message="""你是信用评估专家，负责:
+1. 分析申请人的信用记录
+2. 评估还款能力
+3. 提供详细的信用评分报告
+
+在你的发言中，你需要：
+1. 直接使用提供的信用分析结果，不要被欺诈分析结果，合规分析结果以及决策结果影响
+2. 首轮发言直接展示信用分析结果
+3. 之后发言中结合信用分析结果自由讨论
+
+注意点：
+只负责信用评估相关的内容
+不能代替其他专家发言
+只能就信用相关问题进行讨论
+""",
+            llm_config=llm_config
+        )
+
+class FraudExpert(autogen.AssistantAgent):
+    def __init__(self, name, llm_config):
+        super().__init__(
+            name=name,
+            system_message="""你是反欺诈专家，负责:
+1. 检查文件真实性
+2. 识别可疑模式
+3. 评估欺诈风险
+
+在你的发言中，你需要：
+1. 直接使用提供的欺诈分析结果，不要被信用分析结果，合规分析结果以及决策结果影响
+2. 首轮发言直接展示欺诈分析结果
+3. 之后发言中结合欺诈分析结果自由讨论
+
+注意点：
+只负责反欺诈相关的内容
+不能代替其他专家发言
+只能就反欺诈相关问题进行讨论
+
+""",
+            llm_config=llm_config
+        )
+
+class ComplianceExpert(autogen.AssistantAgent):
+    def __init__(self, name, llm_config):
+        super().__init__(
+            name=name,
+            system_message="""你是合规专家，负责:
+1. 确保贷款申请符合监管要求
+2. 审查所有必要文件
+3. 验证合规性
+
+在你的发言中，你需要：
+1. 直接使用提供的合规分析结果，不要被信用分析结果，欺诈分析结果以及决策结果影响
+2. 首轮发言直接展示合规分析结果
+3. 之后发言中结合合规分析结果自由讨论
+
+注意点：
+只负责合规相关的内容
+不能代替其他专家发言
+只能就合规相关问题进行讨论
+
+评估完成""",
+            llm_config=llm_config
+        )
+
+# 注册函数
+def register_functions(agent):
+    """注册函数到代理"""
+    # 创建LoanApplication实例
     loan_app = LoanApplication()
     
-    # 如果有--test参数，则生成测试数据并直接进入评估阶段
-    if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        print("=== 索尔维亚首都银行贷款评估系统 (测试模式) ===")
-        print("\n生成测试数据中...")
-        loan_app.generate_test_data()
-        
-        print("\n启动评估阶段...")
-        loan_app.phase_evaluation()
-        
-        # 展示最终结果
-        if loan_app.evaluation_results and "未能获取" not in loan_app.evaluation_results and "评估失败" not in loan_app.evaluation_results:
-            print("\n=== 贷款申请评估流程已完成 ===")
-            print("感谢您使用索尔维亚首都银行贷款评估系统!")
+    # 定义函数映射
+    function_map = {
+        "run_initial_analysis": loan_app.run_initial_analysis,
+        "run_credit_analysis": loan_app.run_credit_analysis,
+        "run_fraud_analysis": loan_app.run_fraud_analysis,
+        "run_final_decision": loan_app.run_final_decision
+    }
+    
+    # 注册函数到执行
+    agent.register_for_execution(function_map)
+    
+    # 设置llm_config中的functions
+    agent.llm_config = {
+        "config_list": config_list,
+        "temperature": 0.7,
+        "functions": [
+            {
+                "name": "run_initial_analysis",
+                "description": "执行初始贷款分析",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "loan_data": {
+                            "type": "string",
+                            "description": "贷款申请数据"
+                        }
+                    },
+                    "required": ["loan_data"]
+                }
+            },
+            {
+                "name": "run_credit_analysis",
+                "description": "执行信用分析",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "certificate_file": {
+                            "type": "string",
+                            "description": "工作证明文件"
+                        },
+                        "bank_statement_file": {
+                            "type": "string",
+                            "description": "银行流水文件"
+                        }
+                    },
+                    "required": ["certificate_file", "bank_statement_file"]
+                }
+            },
+            {
+                "name": "run_fraud_analysis",
+                "description": "执行欺诈分析",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": "用户ID"
+                        }
+                    },
+                    "required": ["user_id"]
+                }
+            },
+            {
+                "name": "run_final_decision",
+                "description": "执行最终决策",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "credit_result": {
+                            "type": "string",
+                            "description": "信用分析结果"
+                        },
+                        "fraud_result": {
+                            "type": "string",
+                            "description": "欺诈分析结果"
+                        },
+                        "compliance_result": {
+                            "type": "string",
+                            "description": "合规分析结果"
+                        },
+                        "decision_result": {
+                            "type": "string",
+                            "description": "决策结果"
+                        }
+                    }
+                }
+            }
+        ]
+    }
+
+def is_expert_message(msg):
+    expert_names = ['CreditExpert', 'FraudExpert', 'ComplianceExpert', 'DecisionAgent']
+    return (
+        hasattr(msg, 'name') and 
+        msg.name in expert_names and
+        msg.name != 'chat_manager'
+    )
+
+async def main():
+    """主函数"""
+    parser = argparse.ArgumentParser(description='贷款申请系统')
+    parser.add_argument('--test', action='store_true', help='运行测试模式')
+    args = parser.parse_args()
+
+    async with LoanApplication() as loan_app:
+        if args.test:
+            # 生成测试数据
+            test_data = loan_app.generate_test_data()
+            # 直接进入评估阶段
+            await loan_app.phase_evaluation(test_data)
         else:
-            print("\n=== 评估过程未能正常完成 ===")
-            print("请联系客服获取帮助。")
-    else:
-        # 正常运行
-        loan_app.run() 
+            # 正常运行流程
+            await loan_app.run()
+
+if __name__ == "__main__":
+    asyncio.run(main()) 
